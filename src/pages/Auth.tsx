@@ -52,11 +52,11 @@ const Auth = () => {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-8">
+    <div className="flex min-h-screen items-center justify-center bg-blue-50 p-4">
+      <div className="w-full max-w-md space-y-8 bg-white shadow-md rounded-lg p-8 border border-blue-100">
         <div className="text-center">
-          <h1 className="text-3xl font-bold">TaskFlow</h1>
-          <p className="mt-2 text-muted-foreground">
+          <h1 className="text-3xl font-bold text-blue-600">TaskFlow</h1>
+          <p className="mt-2 text-blue-500">
             {mode === AuthMode.SIGNIN
               ? 'Sign in to your account'
               : 'Create a new account'}
@@ -65,7 +65,7 @@ const Auth = () => {
 
         {error && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <AlertCircle className="h-4 w-4 text-red-500" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -73,39 +73,42 @@ const Auth = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {mode === AuthMode.SIGNUP && (
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username" className="text-blue-700">Username</Label>
               <Input
                 id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                className="focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-blue-700">Email</Label>
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-blue-700">Password</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
           <Button
             type="submit"
-            className="w-full"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             disabled={isLoading}
           >
             {isLoading
@@ -119,6 +122,7 @@ const Auth = () => {
         <div className="text-center">
           <Button
             variant="link"
+            className="text-blue-600 hover:text-blue-800"
             onClick={() =>
               setMode(
                 mode === AuthMode.SIGNIN ? AuthMode.SIGNUP : AuthMode.SIGNIN
