@@ -51,9 +51,9 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       
-      // Use type assertion to work with the tasks table
-      const { data, error } = await (supabase
-        .from('tasks') as any)
+      // Use any type assertion for Supabase client
+      const { data, error } = await (supabase as any)
+        .from('tasks')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -88,16 +88,16 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       
-      // Use type assertion to work with the projects table
-      const { data, error } = await (supabase
-        .from('projects') as any)
+      // Use any type assertion for Supabase client
+      const { data, error } = await (supabase as any)
+        .from('projects')
         .select('*');
       
       if (error) {
         if (error.code === 'PGRST116') {
           await Promise.all(defaultProjects.map(async (project) => {
-            await (supabase
-              .from('projects') as any)
+            await (supabase as any)
+              .from('projects')
               .insert({
                 name: project.name,
                 color: project.color,
@@ -105,8 +105,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               });
           }));
           
-          const { data: retryData, error: retryError } = await (supabase
-            .from('projects') as any)
+          const { data: retryData, error: retryError } = await (supabase as any)
+            .from('projects')
             .select('*');
           
           if (retryError) throw retryError;
@@ -139,8 +139,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProjects(transformedProjects);
       } else {
         await Promise.all(defaultProjects.map(async (project) => {
-          await (supabase
-            .from('projects') as any)
+          await (supabase as any)
+            .from('projects')
             .insert({
               name: project.name,
               color: project.color,
@@ -148,8 +148,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
         }));
         
-        const { data: newData, error: newError } = await (supabase
-          .from('projects') as any)
+        const { data: newData, error: newError } = await (supabase as any)
+          .from('projects')
           .select('*');
           
         if (newError) throw newError;
@@ -183,8 +183,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const dueDate = task.dueDate instanceof Date ? task.dueDate.toISOString() : null;
       
-      const { data, error } = await (supabase
-        .from('tasks') as any)
+      const { data, error } = await (supabase as any)
+        .from('tasks')
         .insert({
           title: task.title,
           completed: task.completed,
@@ -239,8 +239,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           updatedTask.dueDate.toISOString() : updatedTask.dueDate;
       }
       
-      const { error } = await (supabase
-        .from('tasks') as any)
+      const { error } = await (supabase as any)
+        .from('tasks')
         .update(supabaseTaskData)
         .eq('id', id);
         
@@ -262,8 +262,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const taskToDelete = tasks.find(task => task.id === id);
       
-      const { error } = await (supabase
-        .from('tasks') as any)
+      const { error } = await (supabase as any)
+        .from('tasks')
         .delete()
         .eq('id', id);
         
@@ -290,8 +290,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const task = tasks.find(t => t.id === id);
       if (!task) return;
       
-      const { error } = await (supabase
-        .from('tasks') as any)
+      const { error } = await (supabase as any)
+        .from('tasks')
         .update({ completed: !task.completed })
         .eq('id', id);
         
@@ -313,8 +313,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
     
     try {
-      const { data, error } = await (supabase
-        .from('projects') as any)
+      const { data, error } = await (supabase as any)
+        .from('projects')
         .insert({
           name: project.name,
           color: project.color,
@@ -353,8 +353,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const projectToDelete = projects.find(project => project.id === id);
       
-      const { error } = await (supabase
-        .from('projects') as any)
+      const { error } = await (supabase as any)
+        .from('projects')
         .delete()
         .eq('id', id);
         

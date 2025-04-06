@@ -38,3 +38,9 @@ export interface ProjectRow {
 
 // Custom type to use with Supabase when the type system isn't aware of our tables
 export type GenericSupabaseRow = Record<string, any>;
+
+// Custom type for the Supabase client
+export type SupabaseClient = {
+  from: (table: string) => any;
+};
+
