@@ -1,13 +1,12 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import TaskList from '@/components/TaskList';
 import { useTaskContext } from '@/contexts/TaskContext';
 import { format } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Dashboard: React.FC = () => {
-  const { tasks, isLoading } = useTaskContext();
-  const [activeTab, setActiveTab] = useState<'all' | 'today' | 'upcoming'>('all');
+  const { tasks, isLoading, getTasksByProject, getProject } = useTaskContext();
+  const [activeTab, setActiveTab] = useState<'all' | 'today' | 'upcoming' | string>('all');
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -18,31 +17,58 @@ const Dashboard: React.FC = () => {
   const nextWeek = new Date(today);
   nextWeek.setDate(nextWeek.getDate() + 7);
 
-  const todayTasks = tasks.filter(task => {
-    if (!task.dueDate) return false;
-    const dueDate = new Date(task.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-    return dueDate.getTime() === today.getTime();
-  });
+  useEffect(() => {
+    // Handle URL hash changes
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1); // Remove the # symbol
+      if (hash === 'all' || hash === 'today' || hash === 'upcoming') {
+        setActiveTab(hash);
+      } else if (hash.startsWith('project-')) {
+        setActiveTab(hash);
+      }
+    };
 
-  const upcomingTasks = tasks.filter(task => {
-    if (!task.dueDate) return false;
-    const dueDate = new Date(task.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-    return dueDate > today && dueDate <= nextWeek;
-  });
+    // Set initial tab based on URL hash
+    handleHashChange();
 
-  const currentTasks = (() => {
-    switch (activeTab) {
-      case 'today':
-        return todayTasks;
-      case 'upcoming':
-        return upcomingTasks;
-      case 'all':
-      default:
-        return tasks;
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const filteredTasks = useMemo(() => {
+    if (activeTab === 'today') {
+      return tasks.filter(task => {
+        if (!task.dueDate) return false;
+        const dueDate = new Date(task.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+        return dueDate.getTime() === today.getTime();
+      });
+    } else if (activeTab === 'upcoming') {
+      return tasks.filter(task => {
+        if (!task.dueDate) return false;
+        const dueDate = new Date(task.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+        return dueDate > today && dueDate <= nextWeek;
+      });
+    } else if (activeTab.startsWith('project-')) {
+      const projectId = activeTab.replace('project-', '');
+      return getTasksByProject(projectId);
     }
-  })();
+    return tasks;
+  }, [tasks, activeTab, today, nextWeek, getTasksByProject]);
+
+  const getPageTitle = () => {
+    if (activeTab === 'all') return 'All Tasks';
+    if (activeTab === 'today') return 'Today';
+    if (activeTab === 'upcoming') return 'Upcoming';
+    if (activeTab.startsWith('project-')) {
+      const projectId = activeTab.replace('project-', '');
+      const project = getProject(projectId);
+      return project ? project.name : 'All Tasks';
+    }
+    return 'All Tasks';
+  };
 
   if (isLoading) {
     return (
@@ -98,7 +124,12 @@ const Dashboard: React.FC = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Today ({todayTasks.length})
+            Today ({filteredTasks.filter(task => {
+              if (!task.dueDate) return false;
+              const dueDate = new Date(task.dueDate);
+              dueDate.setHours(0, 0, 0, 0);
+              return dueDate.getTime() === today.getTime();
+            }).length})
           </button>
           <button
             onClick={() => setActiveTab('upcoming')}
@@ -108,20 +139,19 @@ const Dashboard: React.FC = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Upcoming ({upcomingTasks.length})
+            Upcoming ({filteredTasks.filter(task => {
+              if (!task.dueDate) return false;
+              const dueDate = new Date(task.dueDate);
+              dueDate.setHours(0, 0, 0, 0);
+              return dueDate > today && dueDate <= nextWeek;
+            }).length})
           </button>
         </nav>
       </div>
 
       <TaskList
-        title={
-          activeTab === 'all'
-            ? 'All Tasks'
-            : activeTab === 'today'
-            ? 'Today'
-            : 'Upcoming'
-        }
-        tasks={currentTasks}
+        title={getPageTitle()}
+        tasks={filteredTasks}
       />
     </div>
   );
