@@ -1,5 +1,6 @@
+
 import React, { createContext, useState, useContext, useCallback, ReactNode, useEffect } from 'react';
-import { Task, Project, Priority, TaskRow, ProjectRow } from '@/types/task';
+import { Task, Project, Priority, TaskRow, ProjectRow, GenericSupabaseRow } from '@/types/task';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -50,10 +51,11 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase
-        .from('tasks')
+      // Use type assertion to work with the tasks table
+      const { data, error } = await (supabase
+        .from('tasks') as any)
         .select('*')
-        .order('created_at', { ascending: false }) as { data: TaskRow[] | null, error: any };
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       
@@ -62,7 +64,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
       
-      const transformedTasks = data.map((task): Task => ({
+      const transformedTasks = data.map((task: TaskRow): Task => ({
         id: task.id,
         title: task.title,
         completed: task.completed,
@@ -86,25 +88,26 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*') as { data: ProjectRow[] | null, error: any };
+      // Use type assertion to work with the projects table
+      const { data, error } = await (supabase
+        .from('projects') as any)
+        .select('*');
       
       if (error) {
         if (error.code === 'PGRST116') {
           await Promise.all(defaultProjects.map(async (project) => {
-            await supabase
-              .from('projects')
+            await (supabase
+              .from('projects') as any)
               .insert({
                 name: project.name,
                 color: project.color,
                 user_id: user?.id
-              } as any);
+              });
           }));
           
-          const { data: retryData, error: retryError } = await supabase
-            .from('projects')
-            .select('*') as { data: ProjectRow[] | null, error: any };
+          const { data: retryData, error: retryError } = await (supabase
+            .from('projects') as any)
+            .select('*');
           
           if (retryError) throw retryError;
           
@@ -113,7 +116,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
           }
           
-          const transformedProjects = retryData.map((project): Project => ({
+          const transformedProjects = retryData.map((project: ProjectRow): Project => ({
             id: project.id,
             name: project.name,
             color: project.color
@@ -127,7 +130,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       if (data && data.length > 0) {
-        const transformedProjects = data.map((project): Project => ({
+        const transformedProjects = data.map((project: ProjectRow): Project => ({
           id: project.id,
           name: project.name,
           color: project.color
@@ -136,18 +139,18 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProjects(transformedProjects);
       } else {
         await Promise.all(defaultProjects.map(async (project) => {
-          await supabase
-            .from('projects')
+          await (supabase
+            .from('projects') as any)
             .insert({
               name: project.name,
               color: project.color,
               user_id: user?.id
-            } as any);
+            });
         }));
         
-        const { data: newData, error: newError } = await supabase
-          .from('projects')
-          .select('*') as { data: ProjectRow[] | null, error: any };
+        const { data: newData, error: newError } = await (supabase
+          .from('projects') as any)
+          .select('*');
           
         if (newError) throw newError;
         
@@ -156,7 +159,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
         
-        const transformedProjects = newData.map((project): Project => ({
+        const transformedProjects = newData.map((project: ProjectRow): Project => ({
           id: project.id,
           name: project.name,
           color: project.color
@@ -180,8 +183,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const dueDate = task.dueDate instanceof Date ? task.dueDate.toISOString() : null;
       
-      const { data, error } = await supabase
-        .from('tasks')
+      const { data, error } = await (supabase
+        .from('tasks') as any)
         .insert({
           title: task.title,
           completed: task.completed,
@@ -189,9 +192,9 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           project_id: task.projectId,
           due_date: dueDate,
           user_id: user.id
-        } as any)
+        })
         .select()
-        .single() as { data: TaskRow | null, error: any };
+        .single();
         
       if (error) throw error;
       
@@ -225,7 +228,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
     
     try {
-      const supabaseTaskData: any = {};
+      const supabaseTaskData: GenericSupabaseRow = {};
       
       if (updatedTask.title !== undefined) supabaseTaskData.title = updatedTask.title;
       if (updatedTask.completed !== undefined) supabaseTaskData.completed = updatedTask.completed;
@@ -236,10 +239,10 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           updatedTask.dueDate.toISOString() : updatedTask.dueDate;
       }
       
-      const { error } = await supabase
-        .from('tasks')
+      const { error } = await (supabase
+        .from('tasks') as any)
         .update(supabaseTaskData)
-        .eq('id', id) as { error: any };
+        .eq('id', id);
         
       if (error) throw error;
       
@@ -259,10 +262,10 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const taskToDelete = tasks.find(task => task.id === id);
       
-      const { error } = await supabase
-        .from('tasks')
+      const { error } = await (supabase
+        .from('tasks') as any)
         .delete()
-        .eq('id', id) as { error: any };
+        .eq('id', id);
         
       if (error) throw error;
       
@@ -287,10 +290,10 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const task = tasks.find(t => t.id === id);
       if (!task) return;
       
-      const { error } = await supabase
-        .from('tasks')
-        .update({ completed: !task.completed } as any)
-        .eq('id', id) as { error: any };
+      const { error } = await (supabase
+        .from('tasks') as any)
+        .update({ completed: !task.completed })
+        .eq('id', id);
         
       if (error) throw error;
       
@@ -310,15 +313,15 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('projects')
+      const { data, error } = await (supabase
+        .from('projects') as any)
         .insert({
           name: project.name,
           color: project.color,
           user_id: user.id
-        } as any)
+        })
         .select()
-        .single() as { data: ProjectRow | null, error: any };
+        .single();
         
       if (error) throw error;
       
@@ -350,10 +353,10 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const projectToDelete = projects.find(project => project.id === id);
       
-      const { error } = await supabase
-        .from('projects')
+      const { error } = await (supabase
+        .from('projects') as any)
         .delete()
-        .eq('id', id) as { error: any };
+        .eq('id', id);
         
       if (error) throw error;
       

@@ -35,3 +35,6 @@ export interface ProjectRow {
   color: string;
   user_id: string;
 }
+
+// Custom type to use with Supabase when the type system isn't aware of our tables
+export type GenericSupabaseRow = Record<string, any>;
