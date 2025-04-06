@@ -19,26 +19,32 @@ interface TaskListProps {
 }
 
 const TaskList: React.FC<TaskListProps> = ({ title, tasks }) => {
-  const { projects, addTask } = useTaskContext();
+  const { projects, addTask, isLoading } = useTaskContext();
   const [isOpen, setIsOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [selectedProject, setSelectedProject] = useState(projects[0]?.id || '');
   const [selectedPriority, setSelectedPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('low');
   const [date, setDate] = useState<Date | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAddTask = () => {
+  const handleAddTask = async () => {
     if (newTaskTitle.trim()) {
-      addTask({
-        title: newTaskTitle,
-        completed: false,
-        priority: selectedPriority,
-        projectId: selectedProject,
-        dueDate: date || null,
-      });
-      setNewTaskTitle('');
-      setSelectedPriority('low');
-      setDate(undefined);
-      setIsOpen(false);
+      setIsSubmitting(true);
+      try {
+        await addTask({
+          title: newTaskTitle,
+          completed: false,
+          priority: selectedPriority,
+          projectId: selectedProject,
+          dueDate: date || null,
+        });
+        setNewTaskTitle('');
+        setSelectedPriority('low');
+        setDate(undefined);
+        setIsOpen(false);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -145,13 +151,17 @@ const TaskList: React.FC<TaskListProps> = ({ title, tasks }) => {
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleAddTask}>Add Task</Button>
+              <Button onClick={handleAddTask} disabled={isSubmitting}>
+                {isSubmitting ? 'Adding...' : 'Add Task'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
       <div className="space-y-2">
-        {tasks.length > 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8">Loading tasks...</div>
+        ) : tasks.length > 0 ? (
           tasks.map((task) => <TaskItem key={task.id} task={task} />)
         ) : (
           <div className="text-center py-8 text-gray-500">No tasks found</div>

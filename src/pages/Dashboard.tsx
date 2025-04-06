@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 import TaskList from '@/components/TaskList';
 import { useTaskContext } from '@/contexts/TaskContext';
 import { format } from 'date-fns';
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Dashboard: React.FC = () => {
-  const { tasks } = useTaskContext();
+  const { tasks, isLoading } = useTaskContext();
   const [activeTab, setActiveTab] = useState<'all' | 'today' | 'upcoming'>('all');
 
   const today = new Date();
@@ -42,6 +43,31 @@ const Dashboard: React.FC = () => {
         return tasks;
     }
   })();
+
+  if (isLoading) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="mb-8">
+          <Skeleton className="h-8 w-40 mb-2" />
+          <Skeleton className="h-4 w-60" />
+        </div>
+        
+        <div className="space-y-2 mb-8">
+          <div className="flex space-x-2 border-b pb-2">
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-8 w-16" />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">

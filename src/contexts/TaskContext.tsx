@@ -1,20 +1,24 @@
 
-import React, { createContext, useState, useContext, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useContext, useCallback, ReactNode, useEffect } from 'react';
 import { Task, Project, Priority } from '@/types/task';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface TaskContextType {
   tasks: Task[];
   projects: Project[];
-  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
-  updateTask: (id: string, task: Partial<Task>) => void;
-  deleteTask: (id: string) => void;
-  toggleTaskCompletion: (id: string) => void;
-  addProject: (project: Omit<Project, 'id'>) => void;
-  deleteProject: (id: string) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => Promise<void>;
+  updateTask: (id: string, task: Partial<Task>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  toggleTaskCompletion: (id: string) => Promise<void>;
+  addProject: (project: Omit<Project, 'id'>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
   getTasksByProject: (projectId: string) => Task[];
   getTasksByPriority: (priority: Priority) => Task[];
   getProject: (id: string) => Project | undefined;
+  isLoading: boolean;
 }
 
 const defaultProjects: Project[] = [
@@ -27,80 +31,331 @@ const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
 export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState<Project[]>(defaultProjects);
-  const { toast } = useToast();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast: uiToast } = useToast();
 
-  const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt'>) => {
-    const newTask: Task = {
-      ...task,
-      id: Math.random().toString(36).substring(2, 9),
-      createdAt: new Date(),
-    };
+  // Fetch tasks and projects from Supabase when the component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      fetchTasks();
+      fetchProjects();
+    } else {
+      // Reset state when user logs out
+      setTasks([]);
+      setProjects(defaultProjects);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const fetchTasks = async () => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      // Transform data to match our Task type
+      const transformedTasks = data.map((task): Task => ({
+        id: task.id,
+        title: task.title,
+        completed: task.completed,
+        priority: task.priority as Priority,
+        projectId: task.project_id,
+        dueDate: task.due_date ? new Date(task.due_date) : null,
+        createdAt: new Date(task.created_at)
+      }));
+      
+      setTasks(transformedTasks);
+    } catch (error: any) {
+      toast.error('Failed to load tasks', {
+        description: error.message
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*');
+      
+      if (error) {
+        // If no projects are found, use defaults
+        if (error.code === 'PGRST116') {
+          // Initialize default projects
+          await Promise.all(defaultProjects.map(async (project) => {
+            await supabase.from('projects').insert({
+              name: project.name,
+              color: project.color,
+              user_id: user?.id
+            });
+          }));
+          
+          // Try fetching again
+          const { data: retryData, error: retryError } = await supabase
+            .from('projects')
+            .select('*');
+          
+          if (retryError) throw retryError;
+          
+          const transformedProjects = retryData.map((project): Project => ({
+            id: project.id,
+            name: project.name,
+            color: project.color
+          }));
+          
+          setProjects(transformedProjects);
+          return;
+        } else {
+          throw error;
+        }
+      }
+      
+      // If we have data, transform and set projects
+      if (data && data.length > 0) {
+        const transformedProjects = data.map((project): Project => ({
+          id: project.id,
+          name: project.name,
+          color: project.color
+        }));
+        
+        setProjects(transformedProjects);
+      } else {
+        // No projects found, initialize with defaults
+        await Promise.all(defaultProjects.map(async (project) => {
+          await supabase.from('projects').insert({
+            name: project.name,
+            color: project.color,
+            user_id: user?.id
+          });
+        }));
+        
+        // Fetch again after initializing
+        const { data: newData, error: newError } = await supabase
+          .from('projects')
+          .select('*');
+          
+        if (newError) throw newError;
+        
+        const transformedProjects = newData.map((project): Project => ({
+          id: project.id,
+          name: project.name,
+          color: project.color
+        }));
+        
+        setProjects(transformedProjects);
+      }
+    } catch (error: any) {
+      toast.error('Failed to load projects', {
+        description: error.message
+      });
+      // Fall back to default projects if there's an error
+      setProjects(defaultProjects);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addTask = useCallback(async (task: Omit<Task, 'id' | 'createdAt'>) => {
+    if (!user) return;
     
-    setTasks((prev) => [...prev, newTask]);
-    toast({
-      title: "Task created",
-      description: `"${task.title}" has been added to your tasks.`,
-    });
-  }, [toast]);
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({
+          title: task.title,
+          completed: task.completed,
+          priority: task.priority,
+          project_id: task.projectId,
+          due_date: task.dueDate,
+          user_id: user.id
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Transform and add to local state
+      const newTask: Task = {
+        id: data.id,
+        title: data.title,
+        completed: data.completed,
+        priority: data.priority as Priority,
+        projectId: data.project_id,
+        dueDate: data.due_date ? new Date(data.due_date) : null,
+        createdAt: new Date(data.created_at)
+      };
+      
+      setTasks((prev) => [newTask, ...prev]);
+      
+      toast.success('Task created', {
+        description: `"${task.title}" has been added to your tasks.`
+      });
+    } catch (error: any) {
+      toast.error('Failed to create task', {
+        description: error.message
+      });
+    }
+  }, [user]);
 
-  const updateTask = useCallback((id: string, updatedTask: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, ...updatedTask } : task))
-    );
-  }, []);
+  const updateTask = useCallback(async (id: string, updatedTask: Partial<Task>) => {
+    if (!user) return;
+    
+    try {
+      // Convert from our Task type to Supabase table format
+      const supabaseTaskData: any = {};
+      
+      if (updatedTask.title !== undefined) supabaseTaskData.title = updatedTask.title;
+      if (updatedTask.completed !== undefined) supabaseTaskData.completed = updatedTask.completed;
+      if (updatedTask.priority !== undefined) supabaseTaskData.priority = updatedTask.priority;
+      if (updatedTask.projectId !== undefined) supabaseTaskData.project_id = updatedTask.projectId;
+      if (updatedTask.dueDate !== undefined) supabaseTaskData.due_date = updatedTask.dueDate;
+      
+      const { error } = await supabase
+        .from('tasks')
+        .update(supabaseTaskData)
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setTasks((prev) =>
+        prev.map((task) => (task.id === id ? { ...task, ...updatedTask } : task))
+      );
+    } catch (error: any) {
+      toast.error('Failed to update task', {
+        description: error.message
+      });
+    }
+  }, [user]);
 
-  const deleteTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const taskToDelete = prev.find(task => task.id === id);
-      const newTasks = prev.filter((task) => task.id !== id);
+  const deleteTask = useCallback(async (id: string) => {
+    if (!user) return;
+    
+    try {
+      const taskToDelete = tasks.find(task => task.id === id);
+      
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setTasks((prev) => prev.filter((task) => task.id !== id));
       
       if (taskToDelete) {
-        toast({
-          title: "Task deleted",
-          description: `"${taskToDelete.title}" has been removed.`,
+        toast.success('Task deleted', {
+          description: `"${taskToDelete.title}" has been removed.`
         });
       }
+    } catch (error: any) {
+      toast.error('Failed to delete task', {
+        description: error.message
+      });
+    }
+  }, [tasks, user]);
+
+  const toggleTaskCompletion = useCallback(async (id: string) => {
+    if (!user) return;
+    
+    try {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
       
-      return newTasks;
-    });
-  }, [toast]);
+      const { error } = await supabase
+        .from('tasks')
+        .update({ completed: !task.completed })
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id ? { ...task, completed: !task.completed } : task
+        )
+      );
+    } catch (error: any) {
+      toast.error('Failed to update task', {
+        description: error.message
+      });
+    }
+  }, [tasks, user]);
 
-  const toggleTaskCompletion = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
-  }, []);
+  const addProject = useCallback(async (project: Omit<Project, 'id'>) => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert({
+          name: project.name,
+          color: project.color,
+          user_id: user.id
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Transform and add to local state
+      const newProject: Project = {
+        id: data.id,
+        name: data.name,
+        color: data.color
+      };
+      
+      setProjects((prev) => [...prev, newProject]);
+      
+      toast.success('Project created', {
+        description: `"${project.name}" has been added to your projects.`
+      });
+    } catch (error: any) {
+      toast.error('Failed to create project', {
+        description: error.message
+      });
+    }
+  }, [user]);
 
-  const addProject = useCallback((project: Omit<Project, 'id'>) => {
-    const newProject: Project = {
-      ...project,
-      id: Math.random().toString(36).substring(2, 9),
-    };
-    setProjects((prev) => [...prev, newProject]);
-    toast({
-      title: "Project created",
-      description: `"${project.name}" has been added to your projects.`,
-    });
-  }, [toast]);
-
-  const deleteProject = useCallback((id: string) => {
-    setProjects((prev) => {
-      const projectToDelete = prev.find(project => project.id === id);
-      const newProjects = prev.filter((project) => project.id !== id);
+  const deleteProject = useCallback(async (id: string) => {
+    if (!user) return;
+    
+    try {
+      const projectToDelete = projects.find(project => project.id === id);
+      
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setProjects((prev) => prev.filter((project) => project.id !== id));
       
       if (projectToDelete) {
-        toast({
-          title: "Project deleted",
-          description: `"${projectToDelete.name}" has been removed.`,
+        toast.success('Project deleted', {
+          description: `"${projectToDelete.name}" has been removed.`
         });
       }
-      
-      return newProjects;
-    });
-  }, [toast]);
+    } catch (error: any) {
+      toast.error('Failed to delete project', {
+        description: error.message
+      });
+    }
+  }, [projects, user]);
 
   const getTasksByProject = useCallback(
     (projectId: string) => {
@@ -137,6 +392,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         getTasksByProject,
         getTasksByPriority,
         getProject,
+        isLoading,
       }}
     >
       {children}

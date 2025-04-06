@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Task } from '@/types/task';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,8 @@ interface TaskItemProps {
 
 const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
   const { toggleTaskCompletion, deleteTask, getProject } = useTaskContext();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const project = getProject(task.projectId);
 
   const priorityColors = {
@@ -32,6 +34,24 @@ const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
     medium: 'bg-priority-medium',
     high: 'bg-priority-high',
     urgent: 'bg-priority-urgent',
+  };
+
+  const handleToggleCompletion = async () => {
+    setIsUpdating(true);
+    try {
+      await toggleTaskCompletion(task.id);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteTask(task.id);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -42,8 +62,9 @@ const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
       <div className="flex items-center gap-3">
         <Checkbox 
           checked={task.completed}
-          onCheckedChange={() => toggleTaskCompletion(task.id)}
+          onCheckedChange={handleToggleCompletion}
           className="data-[state=checked]:bg-primary"
+          disabled={isUpdating}
         />
         <div>
           <div className="font-medium">{task.title}</div>
@@ -75,6 +96,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
             variant="ghost"
             size="icon"
             className="opacity-0 group-hover:opacity-100 h-8 w-8"
+            disabled={isDeleting}
           >
             <Trash className="h-4 w-4" />
           </Button>
@@ -88,8 +110,8 @@ const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteTask(task.id)}>
-              Delete
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
