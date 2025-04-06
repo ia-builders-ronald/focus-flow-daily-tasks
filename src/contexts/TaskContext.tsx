@@ -1,29 +1,9 @@
-
 import React, { createContext, useState, useContext, useCallback, ReactNode, useEffect } from 'react';
-import { Task, Project, Priority } from '@/types/task';
+import { Task, Project, Priority, TaskRow, ProjectRow } from '@/types/task';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-
-// Define database response types based on our actual DB schema
-type TaskRow = {
-  id: string;
-  title: string;
-  completed: boolean;
-  priority: string;
-  project_id: string;
-  due_date: string | null;
-  user_id: string;
-  created_at: string;
-}
-
-type ProjectRow = {
-  id: string;
-  name: string;
-  color: string;
-  user_id: string;
-}
 
 interface TaskContextType {
   tasks: Task[];
@@ -55,13 +35,11 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { user } = useAuth();
   const { toast: uiToast } = useToast();
 
-  // Fetch tasks and projects from Supabase when the component mounts or user changes
   useEffect(() => {
     if (user) {
       fetchTasks();
       fetchProjects();
     } else {
-      // Reset state when user logs out
       setTasks([]);
       setProjects(defaultProjects);
       setIsLoading(false);
@@ -75,12 +53,16 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }) as { data: TaskRow[] | null, error: any };
 
       if (error) throw error;
       
-      // Transform data to match our Task type
-      const transformedTasks = (data as TaskRow[]).map((task): Task => ({
+      if (!data) {
+        setTasks([]);
+        return;
+      }
+      
+      const transformedTasks = data.map((task): Task => ({
         id: task.id,
         title: task.title,
         completed: task.completed,
@@ -106,28 +88,32 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       const { data, error } = await supabase
         .from('projects')
-        .select('*');
+        .select('*') as { data: ProjectRow[] | null, error: any };
       
       if (error) {
-        // If no projects are found, use defaults
         if (error.code === 'PGRST116') {
-          // Initialize default projects
           await Promise.all(defaultProjects.map(async (project) => {
-            await supabase.from('projects').insert({
-              name: project.name,
-              color: project.color,
-              user_id: user?.id
-            });
+            await supabase
+              .from('projects')
+              .insert({
+                name: project.name,
+                color: project.color,
+                user_id: user?.id
+              } as any);
           }));
           
-          // Try fetching again
           const { data: retryData, error: retryError } = await supabase
             .from('projects')
-            .select('*');
+            .select('*') as { data: ProjectRow[] | null, error: any };
           
           if (retryError) throw retryError;
           
-          const transformedProjects = (retryData as ProjectRow[]).map((project): Project => ({
+          if (!retryData) {
+            setProjects(defaultProjects);
+            return;
+          }
+          
+          const transformedProjects = retryData.map((project): Project => ({
             id: project.id,
             name: project.name,
             color: project.color
@@ -140,9 +126,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       }
       
-      // If we have data, transform and set projects
       if (data && data.length > 0) {
-        const transformedProjects = (data as ProjectRow[]).map((project): Project => ({
+        const transformedProjects = data.map((project): Project => ({
           id: project.id,
           name: project.name,
           color: project.color
@@ -150,23 +135,28 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         setProjects(transformedProjects);
       } else {
-        // No projects found, initialize with defaults
         await Promise.all(defaultProjects.map(async (project) => {
-          await supabase.from('projects').insert({
-            name: project.name,
-            color: project.color,
-            user_id: user?.id
-          });
+          await supabase
+            .from('projects')
+            .insert({
+              name: project.name,
+              color: project.color,
+              user_id: user?.id
+            } as any);
         }));
         
-        // Fetch again after initializing
         const { data: newData, error: newError } = await supabase
           .from('projects')
-          .select('*');
+          .select('*') as { data: ProjectRow[] | null, error: any };
           
         if (newError) throw newError;
         
-        const transformedProjects = (newData as ProjectRow[]).map((project): Project => ({
+        if (!newData) {
+          setProjects(defaultProjects);
+          return;
+        }
+        
+        const transformedProjects = newData.map((project): Project => ({
           id: project.id,
           name: project.name,
           color: project.color
@@ -178,7 +168,6 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast.error('Failed to load projects', {
         description: error.message
       });
-      // Fall back to default projects if there's an error
       setProjects(defaultProjects);
     } finally {
       setIsLoading(false);
@@ -189,6 +178,8 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
     
     try {
+      const dueDate = task.dueDate instanceof Date ? task.dueDate.toISOString() : null;
+      
       const { data, error } = await supabase
         .from('tasks')
         .insert({
@@ -196,15 +187,18 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           completed: task.completed,
           priority: task.priority,
           project_id: task.projectId,
-          due_date: task.dueDate,
+          due_date: dueDate,
           user_id: user.id
-        })
+        } as any)
         .select()
-        .single();
+        .single() as { data: TaskRow | null, error: any };
         
       if (error) throw error;
       
-      // Transform and add to local state
+      if (!data) {
+        throw new Error('No data returned after insert');
+      }
+      
       const newTask: Task = {
         id: data.id,
         title: data.title,
@@ -231,23 +225,24 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
     
     try {
-      // Convert from our Task type to Supabase table format
       const supabaseTaskData: any = {};
       
       if (updatedTask.title !== undefined) supabaseTaskData.title = updatedTask.title;
       if (updatedTask.completed !== undefined) supabaseTaskData.completed = updatedTask.completed;
       if (updatedTask.priority !== undefined) supabaseTaskData.priority = updatedTask.priority;
       if (updatedTask.projectId !== undefined) supabaseTaskData.project_id = updatedTask.projectId;
-      if (updatedTask.dueDate !== undefined) supabaseTaskData.due_date = updatedTask.dueDate;
+      if (updatedTask.dueDate !== undefined) {
+        supabaseTaskData.due_date = updatedTask.dueDate instanceof Date ? 
+          updatedTask.dueDate.toISOString() : updatedTask.dueDate;
+      }
       
       const { error } = await supabase
         .from('tasks')
         .update(supabaseTaskData)
-        .eq('id', id);
+        .eq('id', id) as { error: any };
         
       if (error) throw error;
       
-      // Update local state
       setTasks((prev) =>
         prev.map((task) => (task.id === id ? { ...task, ...updatedTask } : task))
       );
@@ -267,11 +262,10 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { error } = await supabase
         .from('tasks')
         .delete()
-        .eq('id', id);
+        .eq('id', id) as { error: any };
         
       if (error) throw error;
       
-      // Update local state
       setTasks((prev) => prev.filter((task) => task.id !== id));
       
       if (taskToDelete) {
@@ -295,12 +289,11 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       const { error } = await supabase
         .from('tasks')
-        .update({ completed: !task.completed })
-        .eq('id', id);
+        .update({ completed: !task.completed } as any)
+        .eq('id', id) as { error: any };
         
       if (error) throw error;
       
-      // Update local state
       setTasks((prev) =>
         prev.map((task) =>
           task.id === id ? { ...task, completed: !task.completed } : task
@@ -323,13 +316,16 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: project.name,
           color: project.color,
           user_id: user.id
-        })
+        } as any)
         .select()
-        .single();
+        .single() as { data: ProjectRow | null, error: any };
         
       if (error) throw error;
       
-      // Transform and add to local state
+      if (!data) {
+        throw new Error('No data returned after insert');
+      }
+      
       const newProject: Project = {
         id: data.id,
         name: data.name,
@@ -357,11 +353,10 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { error } = await supabase
         .from('projects')
         .delete()
-        .eq('id', id);
+        .eq('id', id) as { error: any };
         
       if (error) throw error;
       
-      // Update local state
       setProjects((prev) => prev.filter((project) => project.id !== id));
       
       if (projectToDelete) {
