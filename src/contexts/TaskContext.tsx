@@ -6,6 +6,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+// Define database response types based on our actual DB schema
+type TaskRow = {
+  id: string;
+  title: string;
+  completed: boolean;
+  priority: string;
+  project_id: string;
+  due_date: string | null;
+  user_id: string;
+  created_at: string;
+}
+
+type ProjectRow = {
+  id: string;
+  name: string;
+  color: string;
+  user_id: string;
+}
+
 interface TaskContextType {
   tasks: Task[];
   projects: Project[];
@@ -61,7 +80,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       
       // Transform data to match our Task type
-      const transformedTasks = data.map((task): Task => ({
+      const transformedTasks = (data as TaskRow[]).map((task): Task => ({
         id: task.id,
         title: task.title,
         completed: task.completed,
@@ -108,7 +127,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           if (retryError) throw retryError;
           
-          const transformedProjects = retryData.map((project): Project => ({
+          const transformedProjects = (retryData as ProjectRow[]).map((project): Project => ({
             id: project.id,
             name: project.name,
             color: project.color
@@ -123,7 +142,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // If we have data, transform and set projects
       if (data && data.length > 0) {
-        const transformedProjects = data.map((project): Project => ({
+        const transformedProjects = (data as ProjectRow[]).map((project): Project => ({
           id: project.id,
           name: project.name,
           color: project.color
@@ -147,7 +166,7 @@ export const TaskProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
         if (newError) throw newError;
         
-        const transformedProjects = newData.map((project): Project => ({
+        const transformedProjects = (newData as ProjectRow[]).map((project): Project => ({
           id: project.id,
           name: project.name,
           color: project.color
