@@ -1,13 +1,28 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React from 'react';
+import { TaskProvider } from '@/contexts/TaskContext';
+import { AppSidebar } from '@/components/AppSidebar';
+import Dashboard from './Dashboard';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
+    <TaskProvider>
+      <div className="min-h-screen bg-background">
+        <SidebarProvider>
+          <div className="flex min-h-screen w-full">
+            <AppSidebar />
+            <main className="flex-1">
+              <div className="flex items-center p-4 border-b">
+                <SidebarTrigger />
+                <h1 className="text-xl font-bold ml-4">TaskFlow</h1>
+              </div>
+              <Dashboard />
+            </main>
+          </div>
+        </SidebarProvider>
       </div>
-    </div>
+    </TaskProvider>
   );
 };
 
